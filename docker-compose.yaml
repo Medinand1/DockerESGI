@@ -1,0 +1,114 @@
+version: '3.9'
+services:
+# LARAVEL FISRT BACKEND SERVICE
+  app-backend:
+    container_name: app-backend
+    command: >
+      bash -c "
+      
+      php artisan db:create &&
+      php artisan migrate:fresh --seed &&
+      php artisan serve --host=0.0.0.0 --port=8000
+      "
+    env_file:
+      - ./web_app_2/.env
+    build:
+      context: "./web_app"
+      dockerfile: "./dockerfile"
+    ports:
+      - 8011:8000 
+    volumes:
+      - static-nginx-1:/usr/src/app/public
+    depends_on:
+      - app-mysql
+    networks:
+      - app-network
+      
+# LARAVEL SECOND BACKEND SERVICE
+  app-backend-2:
+    container_name: app-backend-2
+    command: >
+      bash -c "
+      php artisan serve --host=0.0.0.0 --port=8000
+      "
+    env_file:
+      - ./web_app/.env
+    build:
+      context: "./web_app_2"
+      dockerfile: "./dockerfile"
+    ports:
+      - 8012:8000 
+    volumes:
+      - static-nginx-2:/usr/src/app/public
+    depends_on:
+      - app-mysql
+      - app-backend
+    networks:
+      - app-network
+      
+# MSQL SERVICE USE TO CONNECT BOTH BACKEND
+  app-mysql:
+    image: mysql:latest
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=example_app
+    networks:
+      - app-network
+      
+  # A DATABASE MONITORING WEB SERVICE 
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    networks:
+      - app-network
+    
+# NGINX SERVICES CONFIGURATION
+# NGINX CONFIGURATION FOR BOTH SERVER ARE SAME HERE ,
+# THEY ARE USED AS A REVERSE PROXY TO REACH THE 
+# WEBSITE RUNNING INSIDE BACKEND CONTAINER
+
+# NGINX 1 SERVER DEPEND ON BACKEND 1
+  app-nginx-1:
+    container_name: app-nginx-1
+    environment:
+      BACKEND_PROXY_PASS: app-backend:8000
+    build: 
+      context: "./nginx"
+    ports:
+    - "8001:${NGINX_PORT}"
+    volumes:
+      - static-nginx-1:/usr/src/app/public:ro
+    depends_on:
+      - app-backend
+    networks:
+      - app-network
+# NGINX 2 SERVER DEPEND ON BACKEND 2 
+  app-nginx-2:
+    container_name: app-nginx-2
+    environment:
+      BACKEND_PROXY_PASS: app-backend-2:8000
+    build: 
+      context: "./nginx"
+    ports:
+    - "8002:${NGINX_PORT}"
+    volumes:
+      - static-nginx-2:/usr/src/app/public:ro
+    depends_on:
+      - app-backend-2
+    networks:
+      - app-network
+      
+volumes:
+#   db:
+  static-nginx-1:
+  static-nginx-2:
+
+# All SERVICES MUST BE ON THE SAME NETWORK TO PROVIDE DATABASE CONNECTION
+networks:
+  app-network:
+    driver: bridge
