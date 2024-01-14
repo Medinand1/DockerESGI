@@ -1,0 +1,41 @@
+FROM php:8.3.1-apache-bullseye
+
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
+
+# RUN npm i -g npm
+RUN apt update && apt install -y \
+    git \
+    curl \
+    libpng-dev \
+    libonig-dev \
+    libxml2-dev \
+    zip \
+    unzip \
+    vim \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN apt update
+
+RUN curl -sL https://deb.nodesource.com/setup_lts.x | bash - && \
+    apt-get install -y nodejs
+
+# Install PHP extensions
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+
+WORKDIR /usr/src/app
+
+
+
+COPY . /usr/src/app
+RUN npm i
+CMD npm run build
+
+
+RUN composer update
+
+RUN php artisan key:generate
+
+
+EXPOSE 8000
